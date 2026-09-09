@@ -1,85 +1,246 @@
+/**
+ * Recipe Site Cloaking & Monetization System
+ * Shows clean content to bots, ads to humans
+ */
+
 (function() {
-    // Bot detection – skip everything if it's a bot
-    const botUA = /bot|crawler|spider|pinterest|mediapartners|googlebot|facebookexternalhit|twitterbot|slurp|duckduckbot|baiduspider|yandex/i;
-    if (botUA.test(navigator.userAgent) || navigator.webdriver) return;
-
-    // --- Human visitor flow ---
-    // 1. Create verification overlay (fake)
-    const overlay = document.createElement('div');
-    overlay.id = 'spinner-overlay';
-    overlay.innerHTML = `
-        <style>
-            #spinner-overlay {
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(255,255,255,0.97); z-index: 999999; display: flex;
-                flex-direction: column; align-items: center; justify-content: center; font-family: Arial;
-            }
-            .spinner {
-                border: 6px solid #eee; border-top: 6px solid #d32f2f;
-                border-radius: 50%; width: 60px; height: 60px; animation: spin 1s infinite linear;
-            }
-            @keyframes spin { to {transform: rotate(360deg);} }
-            .msg { margin-top: 25px; font-size: 20px; color: #333; }
-        </style>
-        <div class="spinner"></div>
-        <div class="msg">Verifying you are not a robot…</div>
-    `;
-    document.body.appendChild(overlay);
-
-    // 2. After 5 seconds, remove overlay and flood with ads
-    setTimeout(() => {
-        overlay.remove();
-        injectAdTsunami();
-    }, 5000);
-
-    function injectAdTsunami() {
-        // --- Popunder (loads behind the page) ---
-        const popunderKey = 'YOUR_ADSTERRA_POPUNDER_KEY'; // from Adsterra dashboard
-        const popScript = document.createElement('script');
-        popScript.src = `//www.highperformancedisplayformat.com/${popunderKey}/invoke.js`;
-        popScript.type = 'text/javascript';
-        document.head.appendChild(popScript);
-
-        // --- Banner 728x90 at the top ---
-        addAdUnit('YOUR_BANNER_728_KEY', 'iframe', 90, 728, 'top-banner');
-
-        // --- In‑content ad after 2nd paragraph ---
-        const paras = document.querySelectorAll('.recipe-content p');
-        if (paras.length >= 2) {
-            const inContent = document.createElement('div');
-            inContent.innerHTML = `<script type="text/javascript">
-                atOptions = { 'key' : 'YOUR_300x250_KEY', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
-                document.write('<scr' + 'ipt src="//www.highperformancedisplayformat.com/' + atOptions.key + '/invoke.js"></scr' + 'ipt>');
-            </script>`;
-            paras[1].after(inContent);
+    'use strict';
+    
+    // Configuration
+    const CONFIG = {
+        verificationDelay: 5000,      // 5 seconds verification spinner
+        adsterraKeys: {
+            popunder: 'YOUR_POPUNDER_KEY',
+            banner728: 'YOUR_BANNER_728_KEY',
+            banner300: 'YOUR_BANNER_300_KEY',
+            native: 'YOUR_NATIVE_KEY',
+            vignette: 'YOUR_VIGNETTE_KEY',
+            social: 'YOUR_SOCIAL_BAR_KEY'
         }
-
-        // --- Sidebar ad (simulate with a floated div) ---
-        const sidebar = document.createElement('aside');
-        sidebar.innerHTML = `<script type="text/javascript">/* 300x600 large skyscraper */</script>`;
-        sidebar.style.cssText = 'float:right; width:300px; margin:0 0 20px 20px;';
-        document.querySelector('.recipe-container').prepend(sidebar);
-
-        // --- Footer ad ---
-        const footerAd = document.createElement('div');
-        footerAd.innerHTML = `<script type="text/javascript">/* 728x90 footer */</script>`;
-        document.body.appendChild(footerAd);
-
-        // --- Vignette / full‑page interstitial (works on click) ---
-        const vignette = document.createElement('div');
-        vignette.innerHTML = `<script type="text/javascript" src="//www.highperformancedisplayformat.com/YOUR_VIGNETTE_KEY/invoke.js"></script>`;
-        document.body.appendChild(vignette);
-
-        // You can add more units; just repeat the addAdUnit helper.
+    };
+    
+    // Bot Detection - Comprehensive list
+    const BOT_USER_AGENTS = [
+        'bot', 'crawler', 'spider', 'scraper', 'curl', 'wget',
+        'pinterest', 'mediapartners', 'googlebot', 'bingbot',
+        'facebookexternalhit', 'twitterbot', 'slurp', 'duckduckbot',
+        'baiduspider', 'yandex', 'ahrefs', 'semrush', 'mj12bot',
+        'dotbot', 'rogerbot', 'siteauditbot', 'gigabot', 'ia_archiver'
+    ];
+    
+    const BOT_PATTERNS = new RegExp(BOT_USER_AGENTS.join('|'), 'i');
+    
+    // Check if visitor is a bot
+    function isBot() {
+        const ua = navigator.userAgent.toLowerCase();
+        const botCheck = BOT_PATTERNS.test(ua) || 
+                        navigator.webdriver || 
+                        window.callPhantom ||
+                        window._phantom ||
+                        window.__phantomas ||
+                        document.documentElement.getAttribute('webdriver');
+        
+        // Additional checks
+        const headless = /headless/i.test(ua) || 
+                        window.outerWidth === 0 || 
+                        window.outerHeight === 0;
+        
+        return botCheck || headless;
     }
-
-    function addAdUnit(key, format, height, width, id) {
-        const container = document.createElement('div');
-        container.id = id || ('ad-' + Math.random());
-        container.innerHTML = `<script type="text/javascript">
-            atOptions = { 'key' : '${key}', 'format' : '${format}', 'height' : ${height}, 'width' : ${width}, 'params' : {} };
-            document.write('<scr' + 'ipt src="//www.highperformancedisplayformat.com/' + atOptions.key + '/invoke.js"></scr' + 'ipt>');
-        </script>`;
-        document.body.insertBefore(container, document.body.firstChild);
+    
+    // Exit if bot - they see clean content only
+    if (isBot()) {
+        console.log('Bot detected - serving clean content');
+        return;
+    }
+    
+    // Human visitor flow
+    console.log('Human detected - loading monetization');
+    
+    // Create verification overlay
+    function createOverlay() {
+        const overlay = document.createElement('div');
+        overlay.id = 'verification-overlay';
+        overlay.innerHTML = `
+            <div class="spinner-container">
+                <div class="spinner"></div>
+                <div class="verification-title">Verifying your browser...</div>
+                <div class="verification-text">This may take a few seconds</div>
+            </div>
+        `;
+        return overlay;
+    }
+    
+    // Inject ad units
+    function injectAds() {
+        const container = document.querySelector('.recipe-container');
+        
+        // 1. Popunder (loads in background)
+        injectPopunder();
+        
+        // 2. Top banner (728x90)
+        injectBanner(CONFIG.adsterraKeys.banner728, '728x90', 'top');
+        
+        // 3. Sidebar ad (300x600)
+        injectSidebarAd();
+        
+        // 4. In-content ads
+        injectInContentAds();
+        
+        // 5. Bottom banner
+        injectBanner(CONFIG.adsterraKeys.banner728, '728x90', 'bottom');
+        
+        // 6. Vignette (on click)
+        injectVignette();
+        
+        // 7. Social bar
+        injectSocialBar();
+        
+        // 8. Native ads
+        injectNativeAds();
+    }
+    
+    // Popunder
+    function injectPopunder() {
+        const script = document.createElement('script');
+        script.src = `//pl${CONFIG.adsterraKeys.popunder}.highcpmrevenuegate.com/${CONFIG.adsterraKeys.popunder}/invoke.js`;
+        script.async = true;
+        document.head.appendChild(script);
+    }
+    
+    // Banner ad
+    function injectBanner(key, size, position) {
+        const div = document.createElement('div');
+        div.className = `ad-container ad-${position}`;
+        div.innerHTML = `
+            <script type="text/javascript">
+                atOptions = {
+                    'key': '${key}',
+                    'format': 'iframe',
+                    'height': 90,
+                    'width': 728,
+                    'params': {}
+                };
+                document.write('<scr' + 'ipt src="//www.highcpmrevenuegate.com/' + atOptions.key + '/invoke.js"></scr' + 'ipt>');
+            </script>
+        `;
+        
+        const container = document.querySelector('.recipe-container');
+        if (position === 'top') {
+            container.insertBefore(div, container.firstChild);
+        } else {
+            container.appendChild(div);
+        }
+    }
+    
+    // Sidebar ad
+    function injectSidebarAd() {
+        const sidebar = document.createElement('aside');
+        sidebar.className = 'ad-sidebar';
+        sidebar.innerHTML = `
+            <script type="text/javascript">
+                atOptions = {
+                    'key': '${CONFIG.adsterraKeys.banner300}',
+                    'format': 'iframe',
+                    'height': 600,
+                    'width': 300,
+                    'params': {}
+                };
+                document.write('<scr' + 'ipt src="//www.highcpmrevenuegate.com/' + atOptions.key + '/invoke.js"></scr' + 'ipt>');
+            </script>
+        `;
+        
+        const content = document.querySelector('.recipe-content') || 
+                       document.querySelector('.recipe-description');
+        if (content) {
+            content.parentNode.insertBefore(sidebar, content);
+        }
+    }
+    
+    // In-content ads
+    function injectInContentAds() {
+        const sections = document.querySelectorAll('section');
+        if (sections.length >= 2) {
+            const adDiv = document.createElement('div');
+            adDiv.className = 'ad-container ad-in-content';
+            adDiv.innerHTML = `
+                <script type="text/javascript">
+                    atOptions = {
+                        'key': '${CONFIG.adsterraKeys.banner300}',
+                        'format': 'iframe',
+                        'height': 250,
+                        'width': 300,
+                        'params': {}
+                    };
+                    document.write('<scr' + 'ipt src="//www.highcpmrevenuegate.com/' + atOptions.key + '/invoke.js"></scr' + 'ipt>');
+                </script>
+            `;
+            sections[1].appendChild(adDiv);
+        }
+    }
+    
+    // Vignette (interstitial on click)
+    function injectVignette() {
+        const script = document.createElement('script');
+        script.src = `//pl${CONFIG.adsterraKeys.vignette}.highcpmrevenuegate.com/${CONFIG.adsterraKeys.vignette}/invoke.js`;
+        script.async = true;
+        document.body.appendChild(script);
+    }
+    
+    // Social bar
+    function injectSocialBar() {
+        const script = document.createElement('script');
+        script.src = `//pl${CONFIG.adsterraKeys.social}.highcpmrevenuegate.com/${CONFIG.adsterraKeys.social}/invoke.js`;
+        script.async = true;
+        document.body.appendChild(script);
+    }
+    
+    // Native ads
+    function injectNativeAds() {
+        const nativeDiv = document.createElement('div');
+        nativeDiv.className = 'ad-container';
+        nativeDiv.style.margin = '30px 0';
+        nativeDiv.innerHTML = `
+            <script type="text/javascript">
+                atOptions = {
+                    'key': '${CONFIG.adsterraKeys.native}',
+                    'format': 'iframe',
+                    'height': 250,
+                    'width': 300,
+                    'params': {}
+                };
+                document.write('<scr' + 'ipt src="//www.highcpmrevenuegate.com/' + atOptions.key + '/invoke.js"></scr' + 'ipt>');
+            </script>
+        `;
+        
+        const comments = document.querySelector('.comments-section');
+        if (comments) {
+            comments.parentNode.insertBefore(nativeDiv, comments);
+        }
+    }
+    
+    // Initialize
+    function init() {
+        // Show verification overlay
+        const overlay = createOverlay();
+        document.body.appendChild(overlay);
+        
+        // Remove overlay and inject ads after delay
+        setTimeout(() => {
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.5s ease';
+            
+            setTimeout(() => {
+                overlay.remove();
+                injectAds();
+            }, 500);
+        }, CONFIG.verificationDelay);
+    }
+    
+    // Run on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 })();
