@@ -1,0 +1,9 @@
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: Georgia, serif; background: #fafafa; color: #333; }
+.recipe-body { display: flex; justify-content: center; padding: 20px; }
+.recipe-container { max-width: 750px; background: white; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.hero-img { width: 100%; height: auto; border-radius: 8px; }
+h1 { font-size: 2em; margin-bottom: 5px; }
+.meta { color: #777; font-size: 0.9em; }
+.recipe-content h2 { margin-top: 25px; }
+.fake-comments { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }
